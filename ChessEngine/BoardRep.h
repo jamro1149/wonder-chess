@@ -51,6 +51,7 @@ enum class Colour
 
 Colour operator!(Colour) NOEXCEPT; // inverts the colour (e.g. !Colour::White == Colour::Black)
 std::string ToString(Colour);
+std::ostream& operator<<(std::ostream&, Colour);
 
 struct Piece
 {
@@ -106,10 +107,11 @@ struct Board
 	std::array<std::array<boost::optional<Piece>, NumRanks>, NumFiles> squares;
 	boost::optional<Square> enPassantable;
 	Colour toMove;
-	bool whiteCastleKings;
-	bool whiteCastleQueens;
-	bool blackCastleKings;
-	bool blackCastleQueens;
+	// these mark the squares of castleable rooks
+	boost::optional<Square> wLeftCastleRook;
+	boost::optional<Square> wRightCastleRook;
+	boost::optional<Square> bLeftCastleRook;
+	boost::optional<Square> bRightCastleRook;
 	static Board HackyMakeDefaultStart();
 	boost::optional<Piece>& operator[](Square) NOEXCEPT;
 	const boost::optional<Piece>& operator[](Square) const NOEXCEPT;
@@ -119,11 +121,13 @@ bool operator==(const Board&, const Board&) NOEXCEPT;
 bool operator!=(const Board&, const Board&) NOEXCEPT;
 std::ostream& operator<<(std::ostream&, const Board&);
 boost::optional<std::string> CannotMove(const Board&, Move);
-void MakeMove(Board&, Move);        // will perform move even if not legal
-void MakeMoveChecked(Board&, Move); // invalid_argument thrown on illegal move
+void MakeMove(Board&, Move, bool switchTurn = true); // will perform move even if not legal
+void MakeMoveChecked(Board&, Move, bool switchTurn = true); // invalid_argument thrown on illegal move
+Board NextBoard(const Board&, Move, bool switchTurn = true);
+Board NextBoardChecked(const Board&, Move, bool switchTurn = true);
 
 std::unordered_set<Square> ThreatenedSquares(const Board&, Colour);
-bool InCheck(const Board&, Colour);
+bool InCheck(const Board&);
 
 std::unordered_set<Move> GeneratePawnMoves(const Board&, Square, Colour);
 std::unordered_set<Move> GenerateKnightMoves(const Board&, Square, Colour);

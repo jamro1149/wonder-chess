@@ -79,6 +79,11 @@ std::string Chess::ToString(const Colour c)
 	}
 }
 
+std::ostream& Chess::operator<<(std::ostream& os, const Colour c)
+{
+	return os << ToString(c);
+}
+
 bool Chess::operator==(const Piece left, const Piece right) NOEXCEPT
 {
 	return left.type == right.type && left.colour == right.colour;
@@ -370,10 +375,10 @@ Board Board::HackyMakeDefaultStart()
 
 	assert(ret.enPassantable == boost::none);
 	ret.toMove = Colour::White;
-	ret.whiteCastleKings = true;
-	ret.whiteCastleQueens = true;
-	ret.blackCastleKings = true;
-	ret.blackCastleQueens = true;
+	ret.wRightCastleRook = Square(7, 0);
+	ret.wLeftCastleRook = Square(0, 0);
+	ret.bRightCastleRook = Square(7, 7);
+	ret.bLeftCastleRook = Square(0, 7);
 	return ret;
 }
 
@@ -392,10 +397,10 @@ bool Chess::operator==(const Board& left, const Board& right) NOEXCEPT
 	return left.squares == right.squares
 	&& left.enPassantable == right.enPassantable
 	&& left.toMove == right.toMove
-	&& left.whiteCastleKings == right.whiteCastleKings
-	&& left.whiteCastleQueens == right.whiteCastleQueens
-	&& left.blackCastleKings == right.blackCastleKings
-	&& left.blackCastleQueens == right.blackCastleQueens;
+	&& left.wLeftCastleRook == right.wLeftCastleRook
+	&& left.wRightCastleRook == right.wRightCastleRook
+	&& left.bLeftCastleRook == right.bLeftCastleRook
+	&& left.bRightCastleRook == right.bRightCastleRook;
 }
 
 bool Chess::operator!=(const Board& left, const Board& right) NOEXCEPT
@@ -418,19 +423,19 @@ static void PrintBorder(ostream& os, const bool printMoveMarker, const unordered
 
 static void PrintHackyBorder(ostream& os,
 							 const bool printMoveMarker,
-							 const bool castleKings,
-							 const bool castleQueens)
+							 const boost::optional<Square> castleKings,
+							 const boost::optional<Square> castleQueens)
 {
 	unordered_set<int> castleMarkers;
 	// HACK: starting position of rooks and king assumed
 	if (castleKings)
 	{
-		castleMarkers.insert(NumFiles - 1);
+		castleMarkers.insert(castleKings->File());
 		castleMarkers.insert(4);
 	}
 	if (castleQueens)
 	{
-		castleMarkers.insert(0);
+		castleMarkers.insert(castleQueens->File());
 		castleMarkers.insert(4);
 	}
 	PrintBorder(os, printMoveMarker, castleMarkers);
@@ -453,7 +458,7 @@ static void PrintRank(ostream& os, const Board& b, const int rank)
 
 ostream& Chess::operator<<(ostream& os, const Board& b)
 {
-	PrintHackyBorder(os, b.toMove == Colour::Black, b.blackCastleKings, b.blackCastleQueens);
+	PrintHackyBorder(os, b.toMove == Colour::Black, b.bRightCastleRook, b.bLeftCastleRook);
 
 	for (int rank = NumRanks - 1; rank >= 0; --rank)
 	{
@@ -461,7 +466,7 @@ ostream& Chess::operator<<(ostream& os, const Board& b)
 		os << "\n";
 	}
 
-	PrintHackyBorder(os, b.toMove == Colour::White, b.whiteCastleKings, b.whiteCastleQueens);
+	PrintHackyBorder(os, b.toMove == Colour::White, b.wRightCastleRook, b.wLeftCastleRook);
 
 	os << "  ";
 	for (char file = 'a'; file < 'a' + static_cast<char>(NumFiles); ++file)
@@ -482,7 +487,7 @@ boost::optional<string> Chess::CannotMove(const Board& b, const Move m)
 
 	if (piece->colour != b.toMove)
 	{
-		return "it is not " + ToString(b.toMove) + "'s turn to move";
+		return "it is not " + ToString(!b.toMove) + "'s turn to move";
 	}
 
 	bool isMoveLegal = false;
@@ -503,6 +508,8 @@ boost::optional<string> Chess::CannotMove(const Board& b, const Move m)
 	case Type::Queen:
 		isMoveLegal = GenerateQueenMoves(b, m.from, piece->colour).count(m) > 0;
 		break;
+	case Type::King:
+		isMoveLegal = GenerateKingMoves(b, m.from, piece->colour).count(m) > 0;
 	}
 
 	return isMoveLegal
@@ -510,29 +517,80 @@ boost::optional<string> Chess::CannotMove(const Board& b, const Move m)
 		: boost::make_optional("cannot move " + ToString(piece->type) + " to " + ToString(m.to));
 }
 
-static void HandlePawnMove(Board& b, const Move m, boost::optional<Square> enPassantable)
+static void HandlePawnMove(Board& b, const Move m, boost::optional<Square> enPassantable) NOEXCEPT
 {
 	// check en passent
 	const auto moveVec = m.to - m.from;
-	if (abs(moveVec.first) == 2)
+	if (abs(moveVec.second) == 2)
 	{
 		// this piece moved double, so can be captured en passent on opponent's turn
 		b.enPassantable = m.to;
 	}
-	else if (moveVec.second != 0 && !b[m.to])
+	else if (moveVec.first != 0 && !b[m.to] && enPassantable)
 	{
-		// the move is an en passent capture!
-		assert(enPassantable);
+		// the move is an en passant capture!
 		b[*enPassantable] = boost::none;
 	}
 }
 
-static void HandleKingMove(Board& /*b*/, const Move /*m*/)
+static void HandleRookMove(Board& b, const Move m, const Colour c) NOEXCEPT
 {
-	throw exception("not implemented yet");
+	if (c == Colour::White)
+	{
+		if (b.wLeftCastleRook == m.from)
+		{
+			b.wLeftCastleRook = boost::none;
+		}
+		else if (b.wRightCastleRook == m.from)
+		{
+			b.wRightCastleRook = boost::none;
+		}
+	}
+	else
+	{
+		if (b.bLeftCastleRook == m.from)
+		{
+			b.bLeftCastleRook = boost::none;
+		}
+		else if (b.bRightCastleRook == m.from)
+		{
+			b.bRightCastleRook = boost::none;
+		}
+	}
 }
 
-void Chess::MakeMove(Board& b, const Move m)
+static void HandleKingMove(Board& b, const Move m, const Colour c) NOEXCEPT
+{
+	const int fileDifference = (m.to - m.from).first;
+	if (c == Colour::White)
+	{
+		if (fileDifference > 1 && b.wRightCastleRook)
+		{
+			MakeMove(b, Move(*b.wRightCastleRook, *(m.to - make_pair(1, 0))));
+		}
+		else if (fileDifference < -1 && b.wLeftCastleRook)
+		{
+			MakeMove(b, Move(*b.wLeftCastleRook, *(m.to + make_pair(1, 0))));
+		}
+		b.wLeftCastleRook = boost::none;
+		b.wRightCastleRook = boost::none;
+	}
+	else
+	{
+		if (fileDifference > 1 && b.bRightCastleRook)
+		{
+			MakeMove(b, Move(*b.bRightCastleRook, *(m.to - make_pair(1, 0))), false);
+		}
+		else if (fileDifference < -1 && b.bLeftCastleRook)
+		{
+			MakeMove(b, Move(*b.bLeftCastleRook, *(m.to + make_pair(1, 0))), false);
+		}
+		b.bLeftCastleRook = boost::none;
+		b.bRightCastleRook = boost::none;
+	}
+}
+
+void Chess::MakeMove(Board& b, const Move m, const bool switchTurn)
 {
 	auto piece = b[m.from];
 	if (!piece.is_initialized())
@@ -540,7 +598,10 @@ void Chess::MakeMove(Board& b, const Move m)
 		throw invalid_argument("no piece at " + ToString(m.from));
 	}
 
-	b.toMove = !b.toMove;
+	if (switchTurn)
+	{
+		b.toMove = !b.toMove;
+	}
 
 	const auto currEnPassentable = b.enPassantable;
 	b.enPassantable = boost::none; // this will be overwritten if player double-moves a pawn
@@ -551,8 +612,11 @@ void Chess::MakeMove(Board& b, const Move m)
 	case Type::Pawn:
 		HandlePawnMove(b, m, currEnPassentable);
 		break;
+	case Type::Rook:
+		HandleRookMove(b, m, piece->colour);
+		break;
 	case Type::King:
-		HandleKingMove(b, m);
+		HandleKingMove(b, m, piece->colour);
 		break;
 	}
 
@@ -561,112 +625,170 @@ void Chess::MakeMove(Board& b, const Move m)
 	b[m.to] = *piece;
 }
 
-void Chess::MakeMoveChecked(Board& b, const Move m)
+void Chess::MakeMoveChecked(Board& b, const Move m, const bool switchTurn)
 {
 	if (auto reason = CannotMove(b, m))
 	{
 		throw invalid_argument(*reason);
 	}
-	MakeMove(b, m);
+	MakeMove(b, m, switchTurn);
 }
 
-template <typename container>
-static unordered_set<Square> CheckPlainAttacks(const Square s, const container& vecs)
+Board Chess::NextBoard(const Board& b, const Move m, const bool switchTurn)
+{
+	Board ret(b);
+	MakeMove(ret, m, switchTurn);
+	return ret;
+}
+
+Board Chess::NextBoardChecked(const Board& b, const Move m, const bool switchTurn)
+{
+	Board ret(b);
+	MakeMoveChecked(ret, m, switchTurn);
+	return ret;
+}
+
+template<typename predicate, typename container>
+static unordered_set<Square> CheckAttacks(const Board& b, const Square s, const Colour c, const predicate& p, const container& vecs, const int range = -1)
 {
 	unordered_set<Square> ret;
 	ret.reserve(vecs.size());
 
 	for (const auto vec : vecs)
 	{
-		auto toSquare = s + vec;
-		if (toSquare)
+		int remainingRange = range;
+		for (auto toSquare = s + vec; toSquare && remainingRange != 0; toSquare = *toSquare + vec, --remainingRange)
 		{
-			ret.insert(*toSquare);
+			if (p(b, *toSquare, c))
+			{
+				ret.insert(*toSquare);
+			}
+			else
+			{
+				break;
+			}
 		}
 	}
 
 	return ret;
 }
 
-template<typename container>
-static unordered_set<Square> CheckStraightAttacks(const Board& b, const Square s, const container& vecs)
+// collection of functors to be used with CheckAttacks
+namespace
 {
-	unordered_set<Move> ret;
-	ret.reserve(vecs.size());
-
-	for (const auto vec : vecs)
+// used to determine threatened squares
+class IsThreatening
+{
+	mutable bool isBlocked;
+public:
+	IsThreatening() NOEXCEPT : isBlocked(false) {}
+	bool operator()(const Board& b, const Square s, Colour) const NOEXCEPT
 	{
-		for (auto toSquare = s + vec; toSquare; toSquare = *toSquare + vec)
+		bool ret = false;
+		if (!isBlocked)
 		{
-			ret.insert(*toSquare);
+			ret = true;
+			if (b[s])
+			{
+				isBlocked = true;
+			}
 		}
+		return ret;
 	}
+};
 
-	return ret;
+// suitable for pawn movement
+struct IsEmpty
+{
+	bool operator()(const Board& b, const Square s, const Colour) const NOEXCEPT
+	{
+		return !b[s];
+	}
+};
+
+// suitable for pawn capture
+struct IsCapturable
+{
+	bool operator()(const Board& b, const Square s, const Colour c) const NOEXCEPT
+	{
+		return b[s] && b[s]->colour != c;
+	}
+};
+
+// suitable for non-pawn movement and capture
+struct IsEmptyOrCapturable
+{
+	bool operator()(const Board& b, const Square s, const Colour c) const NOEXCEPT
+	{
+		return IsEmpty()(b, s, c) || IsCapturable()(b, s, c);
+	}
+};
 }
+
+static const array<pair<int, int>, 2> WhitePawnAttacks = {
+	make_pair(-1, 1), make_pair(1, 1)
+};
+
+static const array<pair<int, int>, 2> BlackPawnAttacks = {
+	make_pair(-1, -1), make_pair(1, -1)
+};
+
+static const array<pair<int, int>, 8> LShapes = {
+	make_pair(-2, -1), make_pair(-2, 1), make_pair(-1, -2), make_pair(-1, 2),
+	make_pair(1, -2), make_pair(1, 2), make_pair(2, -1), make_pair(2, 1)
+};
+
+static const array<pair<int, int>, 4> Diagonals = {
+	make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1)
+};
+
+static const array<pair<int, int>, 4> Cardinals = {
+	make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0)
+};
+
+static const array<pair<int, int>, 8> CardinalsAndDiagonals = {
+	make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0),
+	make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1)
+};
+
+// Board irrelevant for pawn, knight and king, and colour only relevant to pawn
 
 static unordered_set<Square> PawnThreatening(const Square s, const Colour c)
 {
-	const array<pair<int, int>, 2> forwardDiagonals = {
-		c == Colour::White ? make_pair(1, 1) : make_pair(1, -1),
-		c == Colour::Black ? make_pair(-1, 1) : make_pair(-1, -1)
-	};
-	
-	return CheckPlainAttacks(s, forwardDiagonals);
+	return CheckAttacks(Board(), s, c, IsThreatening(), c == Colour::White ? WhitePawnAttacks : BlackPawnAttacks, 1);
 }
 
 static unordered_set<Square> KnightThreatening(const Square s)
 {
-	const array<pair<int, int>, 8> lShapes = {
-		make_pair(-2, -1), make_pair(-2, 1), make_pair(-1, -2), make_pair(-1, 2),
-		make_pair(1, -2), make_pair(1, 2), make_pair(2, -1), make_pair(2, 1)
-	};
-
-	return CheckPlainAttacks(s, lShapes);
+	return CheckAttacks(Board(), s, Colour(), IsThreatening(), LShapes, 1);
 }
 
 static unordered_set<Square> BishopThreatening(const Board& b, const Square s)
 {
-	const array<pair<int, int>, 4> diagonals = {
-		make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1)
-	};
-
-	return CheckStraightAttacks(b, s, diagonals);
+	return CheckAttacks(b, s, Colour(), IsThreatening(), Diagonals);
 }
 
 static unordered_set<Square> RookThreatening(const Board& b, const Square s)
 {
-	const array<pair<int, int>, 4> cardinals = {
-		make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0)
-	};
-
-	return CheckStraightAttacks(b, s, cardinals);
+	return CheckAttacks(b, s, Colour(), IsThreatening(), Cardinals);
 }
 
 static unordered_set<Square> QueenThreatening(const Board& b, const Square s)
 {
-	const array<pair<int, int>, 8> cardinalsAndDiagonals = {
-		make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0),
-		make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1)
-	};
-
-	return CheckStraightAttacks(b, s, cardinalsAndDiagonals);
+	return CheckAttacks(b, s, Colour(), IsThreatening(), CardinalsAndDiagonals);
 }
 
 static unordered_set<Square> KingThreatening(const Square s)
 {
-	const array<pair<int, int>, 8> cardinalsAndDiagonals = {
-		make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0),
-		make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1)
-	};
-
-	return CheckPlainAttacks(s, cardinalsAndDiagonals);
+	return CheckAttacks(Board(), s, Colour(), IsThreatening(), CardinalsAndDiagonals, 1);
 }
 
 static unordered_set<Square> ThreateningSquares(const Board& b, const Square s, const Piece p)
 {
 	switch (p.type)
 	{
+	default:
+		assert(false);
 	case Type::Pawn:
 		return PawnThreatening(s, p.colour);
 	case Type::Knight:
@@ -693,7 +815,7 @@ unordered_set<Square> Chess::ThreatenedSquares(const Board& b, const Colour c)
 			const auto piece = b.squares[file][rank];
 			if (piece && piece->colour == c)
 			{
-				auto squares = ThreateningSquares(b, Square(file, rank), *piece);
+				const auto squares = ThreateningSquares(b, Square(file, rank), *piece);
 				ret.insert(squares.begin(), squares.end());
 			}
 		}
@@ -702,12 +824,12 @@ unordered_set<Square> Chess::ThreatenedSquares(const Board& b, const Colour c)
 	return ret;
 }
 
-bool Chess::InCheck(const Board& b, const Colour c)
+bool Chess::InCheck(const Board& b)
 {
-	for (const Square s : ThreatenedSquares(b, !c))
+	for (const Square s : ThreatenedSquares(b, !b.toMove))
 	{
-		auto piece = b[s];
-		if (piece && piece->colour == c && piece->type == Type::King)
+		const auto piece = b[s];
+		if (piece && piece->colour == b.toMove && piece->type == Type::King)
 		{
 			return true;
 		}
@@ -715,143 +837,61 @@ bool Chess::InCheck(const Board& b, const Colour c)
 	return false;
 }
 
-static bool CheckPawnAttack(const Board& b, const Square s, const Colour c, const pair<int, int> vec)
+static unordered_set<Move> LegalMoves(const Board& b, const Square from, const unordered_set<Square>& tos)
 {
-	if (auto leftSq = s + vec)
+	unordered_set<Move> ret;
+	ret.reserve(tos.size());
+
+	for (const Square to : tos)
 	{
-		if (auto leftPiece = b[*leftSq])
+		const Move m(from, to);
+		const auto next = NextBoard(b, m);
+		if (!InCheck(next))
 		{
-			if (leftPiece->colour != c)
-			{
-				return true;
-			}
-		}
-		else if (b.enPassantable && leftSq == *b.enPassantable + make_pair(0, vec.second))
-		{
-			return true;
+			ret.insert(m);
 		}
 	}
-	return false;
+
+	return ret;
 }
 
 unordered_set<Move> Chess::GeneratePawnMoves(const Board& b, const Square s, const Colour c)
 {
-	unordered_set<Move> ret;
-
 	const bool isWhite = c == Colour::White;
 
-	const auto forward        = isWhite ? make_pair(0, 1)  : make_pair(0, -1);
-	const auto doubleForward  = isWhite ? make_pair(0, 2)  : make_pair(0, -2);
-	const auto attackLeft     = isWhite ? make_pair(-1, 1) : make_pair(-1, -1);
-	const auto attackRight    = isWhite ? make_pair(1, 1)  : make_pair(1, -1);
-	const int  doubleMoveRank = isWhite ? 1                : NumRanks - 2;;
+	// insert the non-attacks
+	const array<pair<int, int>, 1> moveVec = { (isWhite ? make_pair(0, 1) : make_pair(0, -1)) };
+	const int  doubleMoveRank = isWhite ? 1 : NumRanks - 2;
+	auto ret = LegalMoves(b, s, CheckAttacks(b, s, c, IsEmpty(), moveVec, s.Rank() == doubleMoveRank ? 2 : 1));
 
-
-	// check forward single move
-	auto forwardSq = s + forward;
-	if (forwardSq && b[*forwardSq] == boost::none)
-	{
-		ret.insert(Move(s, *forwardSq));
-
-		// check forward double move
-		auto doubleSq = s + doubleForward;
-		if (doubleSq && s.Rank() == doubleMoveRank && b[*doubleSq] == boost::none)
-		{
-			ret.insert(Move(s, *doubleSq));
-		}
-	}
-
-	// check attacks
-	if (CheckPawnAttack(b, s, c, attackLeft))
-	{
-		ret.insert(Move(s, *(s + attackLeft)));
-	}
-	if (CheckPawnAttack(b, s, c, attackRight))
-	{
-		ret.insert(Move(s, *(s + attackRight)));
-	}
+	// insert the attacks
+	const auto attacks = LegalMoves(b, s, CheckAttacks(b, s, c, IsCapturable(), isWhite ? WhitePawnAttacks : BlackPawnAttacks, 1));
+	ret.insert(attacks.begin(), attacks.end());
 
 	return ret;
-}
-
-static bool isSquareAvailable(const Board& b, const Square s, const Colour c) NOEXCEPT
-{
-	return !b[s] || b[s]->colour != c;
 }
 
 unordered_set<Move> Chess::GenerateKnightMoves(const Board& b, const Square s, const Colour c)
 {
-	unordered_set<Move> ret;
-
-	static const pair<int, int> knightMovementVecs[] = {
-			{ 1, 2 }, { 1, -2 }, { -1, 2 }, { -1, -2 },
-			{ 2, 1 }, { 2, -1 }, { -2, 1 }, { -2, -1 }
-	};
-
-	for (const auto vec : knightMovementVecs)
-	{
-		auto toSquare = s + vec;
-		if (toSquare && isSquareAvailable(b, *toSquare, c))
-		{
-			ret.insert(Move(s, *toSquare));
-		}
-	}
-
-	return ret;
-}
-
-template<typename container>
-static unordered_set<Move> GenerateStraightMoves(const Board& b,
-												 const Square s,
-												 const Colour c,
-												 container& vecs)
-{
-	unordered_set<Move> ret;
-
-	for (const auto vec : vecs)
-	{
-		for (auto toSquare = s + vec; toSquare; toSquare = *toSquare + vec)
-		{
-			if (isSquareAvailable(b, *toSquare, c))
-			{
-				ret.insert(Move(s, *toSquare));
-			}
-
-			// if toSquare is currently taken, we can't move further along the diagonal
-			if (b[*toSquare])
-			{
-				break;
-			}
-		}
-	}
-
-	return ret;
+	return LegalMoves(b, s, CheckAttacks(b, s, c, IsEmptyOrCapturable(), LShapes, 1));
 }
 
 unordered_set<Move> Chess::GenerateBishopMoves(const Board& b, const Square s, const Colour c)
 {
-	static const pair<int, int> diagonals[] = {
-			{ -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 }
-	};
-
-	return GenerateStraightMoves(b, s, c, diagonals);
+	return LegalMoves(b, s, CheckAttacks(b, s, c, IsEmptyOrCapturable(), Diagonals));
 }
 
 unordered_set<Move> Chess::GenerateRookMoves(const Board& b, const Square s, const Colour c)
 {
-	static const pair<int, int> cardinals[] = {
-			{ 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 }
-	};
-
-	return GenerateStraightMoves(b, s, c, cardinals);
+	return LegalMoves(b, s, CheckAttacks(b, s, c, IsEmptyOrCapturable(), Cardinals));
 }
 
 unordered_set<Move> Chess::GenerateQueenMoves(const Board& b, const Square s, const Colour c)
 {
-	static const pair<int, int> cardinalsAndDiagonals[] = {
-			{ 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 },
-			{ -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 }
-	};
+	return LegalMoves(b, s, CheckAttacks(b, s, c, IsEmptyOrCapturable(), CardinalsAndDiagonals));
+}
 
-	return GenerateStraightMoves(b, s, c, cardinalsAndDiagonals);
+unordered_set<Move> Chess::GenerateKingMoves(const Board& b, const Square s, const Colour c)
+{
+	return LegalMoves(b, s, CheckAttacks(b, s, c, IsEmptyOrCapturable(), CardinalsAndDiagonals, 1));
 }

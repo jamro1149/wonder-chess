@@ -24,9 +24,12 @@ int main()
 		try
 		{
 			auto m = StringToMove(s);
-			cout << (CannotMove(b, m) == boost::none) << "\n";
-			MakeMove(b, m);
+			MakeMoveChecked(b, m);
 			cout << b << "\n";
+			if (InCheck(b))
+			{
+				cout << b.toMove << " is in check!\n";
+			}
 		}
 		catch (logic_error e)
 		{
