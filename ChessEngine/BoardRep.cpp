@@ -1,6 +1,12 @@
 #include <algorithm>
 #include <cctype>
+#if STDREGEX_SUPPORTED
 #include <regex>
+#else
+#include <boost/regex.hpp>
+using boost::regex;
+using boost::smatch;
+#endif
 #include <stdexcept>
 #include "BoardRep.h"
 
@@ -199,14 +205,14 @@ ostream& Chess::operator<<(ostream& os, const Square s)
 	return os << ToString(s);
 }
 
-bool Chess::PutsOutOfRange(const Square s, const pair<int, int> vec)
+bool Chess::PutsOutOfRange(const Square s, const pair<int, int> vec) NOEXCEPT
 {
 	const int newFile = s.File() + vec.first;
 	const int newRank = s.Rank() + vec.second;
 	return newFile < 0 || newFile >= NumFiles || newRank < 0 || newRank >= NumRanks;
 }
 
-boost::optional<Square> Chess::operator+(const Square left, const pair<int, int> right)
+boost::optional<Square> Chess::operator+(const Square left, const pair<int, int> right) NOEXCEPT
 {
 	if (PutsOutOfRange(left, right))
 	{
@@ -227,7 +233,7 @@ Square& Chess::operator+=(Square& left, const pair<int, int> right)
 	throw out_of_range("operator+= puts out of range");
 }
 
-boost::optional<Square> Chess::operator-(const Square left, const pair<int, int> right)
+boost::optional<Square> Chess::operator-(const Square left, const pair<int, int> right) NOEXCEPT
 {
 	return left + make_pair(-right.first, -right.second);
 }
@@ -618,6 +624,8 @@ void Chess::MakeMove(Board& b, const Move m, const bool switchTurn)
 	case Type::King:
 		HandleKingMove(b, m, piece->colour);
 		break;
+        default:
+                break;
 	}
 
 	// make the move
@@ -726,29 +734,29 @@ struct IsEmptyOrCapturable
 }
 
 static const array<pair<int, int>, 2> WhitePawnAttacks = {
-	make_pair(-1, 1), make_pair(1, 1)
+  { make_pair(-1, 1), make_pair(1, 1) }
 };
 
 static const array<pair<int, int>, 2> BlackPawnAttacks = {
-	make_pair(-1, -1), make_pair(1, -1)
+  { make_pair(-1, -1), make_pair(1, -1) }
 };
 
 static const array<pair<int, int>, 8> LShapes = {
-	make_pair(-2, -1), make_pair(-2, 1), make_pair(-1, -2), make_pair(-1, 2),
-	make_pair(1, -2), make_pair(1, 2), make_pair(2, -1), make_pair(2, 1)
+  { make_pair(-2, -1), make_pair(-2, 1), make_pair(-1, -2), make_pair(-1, 2),
+    make_pair(1, -2),  make_pair(1, 2),  make_pair(2, -1),  make_pair(2, 1) }
 };
 
 static const array<pair<int, int>, 4> Diagonals = {
-	make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1)
+  { make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1) }
 };
 
 static const array<pair<int, int>, 4> Cardinals = {
-	make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0)
+  { make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0) }
 };
 
 static const array<pair<int, int>, 8> CardinalsAndDiagonals = {
-	make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0),
-	make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1)
+  { make_pair(0, -1),  make_pair(0, 1),  make_pair(-1, 0), make_pair(1, 0),
+    make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1) }
 };
 
 // Board irrelevant for pawn, knight and king, and colour only relevant to pawn
@@ -860,7 +868,7 @@ unordered_set<Move> Chess::GeneratePawnMoves(const Board& b, const Square s, con
 	const bool isWhite = c == Colour::White;
 
 	// insert the non-attacks
-	const array<pair<int, int>, 1> moveVec = { (isWhite ? make_pair(0, 1) : make_pair(0, -1)) };
+	const array<pair<int, int>, 1> moveVec = { { isWhite ? make_pair(0, 1) : make_pair(0, -1) } };
 	const int  doubleMoveRank = isWhite ? 1 : NumRanks - 2;
 	auto ret = LegalMoves(b, s, CheckAttacks(b, s, c, IsEmpty(), moveVec, s.Rank() == doubleMoveRank ? 2 : 1));
 
