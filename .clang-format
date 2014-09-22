@@ -1,0 +1,6 @@
+BasedOnStyle: LLVM
+AllowShortIfStatementsOnASingleLine: false
+BreakBeforeBraces: Allman
+IndentWidth: 4
+Standard: Cpp11
+UseTab: Never
