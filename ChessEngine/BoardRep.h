@@ -155,6 +155,7 @@ Board NextBoardChecked(const Board&, Move, bool switchTurn = true);
 
 std::unordered_set<Square> ThreatenedSquares(const Board&, Colour);
 bool InCheck(const Board&);
+bool MoveIsReversible(const Board&, Move);
 
 std::unordered_set<Move> GeneratePawnMoves(const Board&, Square, Colour);
 std::unordered_set<Move> GenerateKnightMoves(const Board&, Square, Colour);

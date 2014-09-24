@@ -13,6 +13,7 @@ int main()
     cout << current << endl;
 
     unordered_multiset<Board> history = {current};
+    int reversibleMoves = 0;
 
     for (string s; getline(cin, s);)
     {
@@ -25,8 +26,15 @@ int main()
         try
         {
             auto m = StringToMove(s);
+
+            if (MoveIsReversible(current, m))
+            {
+                ++reversibleMoves;
+            }
+
             MakeMoveChecked(current, m);
             cout << current << "\n";
+
             if (InCheck(current))
             {
                 cout << current.toMove << " is in check!\n";
@@ -36,6 +44,12 @@ int main()
             if (history.count(current) >= 3)
             {
                 cout << "The game is a draw by threefold repetition\n";
+                //return 0;
+            }
+
+            if (reversibleMoves >= 50)
+            {
+                cout << "The game is a draw by the fifty-move rule\n";
                 return 0;
             }
         }

@@ -941,6 +941,15 @@ bool Chess::InCheck(const Board& b)
     return false;
 }
 
+bool Chess::MoveIsReversible(const Board& b, const Move m)
+{
+    if (!b[m.from])
+    {
+        throw invalid_argument("No piece at " + ToString(m.from));
+    }
+    return b[m.from]->type != Type::Pawn && !b[m.to];
+}
+
 static unordered_set<Move> LegalMoves(const Board& b, const Square from,
                                       const unordered_set<Square>& tos)
 {
