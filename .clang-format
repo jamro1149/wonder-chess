@@ -1,6 +1,9 @@
-BasedOnStyle: LLVM
+AllowShortFunctionsOnASingleLine: false
 AllowShortIfStatementsOnASingleLine: false
 BreakBeforeBraces: Allman
+ColumnLimit: 80
+IndentCaseLabels: false
 IndentWidth: 4
+PointerBindsToType: true
 Standard: Cpp11
 UseTab: Never
