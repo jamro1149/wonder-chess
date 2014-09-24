@@ -12,17 +12,69 @@ using boost::smatch;
 
 using namespace Chess;
 using namespace std;
+using boost::optional;
+using boost::none;
 
+static size_t CombineHash(size_t OldHash, size_t NewHash)
+{
+    return (OldHash << 1) ^ NewHash;
+}
+
+size_t hash<optional<Piece>>::operator()(const optional<Piece>& ot) const
+{
+    hash<bool> hb;
+    hash<int> hi;
+    return CombineHash(hb(ot.is_initialized()),
+                       !ot ? 0 : CombineHash(hi(static_cast<int>(ot->type)),
+                                             hi(static_cast<int>(ot->colour))));
+}
 size_t hash<Square>::operator()(const Square& s) const
 {
     return hash<int>()(s.id);
+}
+
+size_t hash<optional<Square>>::operator()(const optional<Square>& os) const
+{
+    if (os)
+    {
+        return hash<Square>()(*os);
+    }
+    else
+    {
+        return hash<int>()(-1);
+    }
 }
 
 size_t hash<Move>::operator()(const Move& m) const
 {
     size_t h1 = hash<Square>()(m.from);
     size_t h2 = hash<Square>()(m.to);
-    return h1 ^ (h2 << 1);
+    return CombineHash(h1, h2);
+}
+
+size_t hash<Board>::operator()(const Board& b) const
+{
+    size_t ret = 0u;
+
+    for (int file = 0; file < NumFiles; ++file)
+    {
+        for (int rank = 0; rank < NumRanks; ++rank)
+        {
+            ret = CombineHash(ret,
+                              hash<optional<Piece>>()(b.squares[file][rank]));
+        }
+    }
+
+    hash<optional<Square>> hos;
+
+    ret = CombineHash(ret, hos(b.enPassantable));
+    ret = CombineHash(ret, hash<int>()(static_cast<int>(b.toMove)));
+    ret = CombineHash(ret, hos(b.wLeftCastleRook));
+    ret = CombineHash(ret, hos(b.wRightCastleRook));
+    ret = CombineHash(ret, hos(b.bLeftCastleRook));
+    ret = CombineHash(ret, hos(b.wRightCastleRook));
+
+    return ret;
 }
 
 std::string Chess::ToString(const Type t)
@@ -217,12 +269,12 @@ bool Chess::PutsOutOfRange(const Square s, const pair<int, int> vec) NOEXCEPT
            newRank >= NumRanks;
 }
 
-boost::optional<Square> Chess::operator+(const Square left,
-                                         const pair<int, int> right) NOEXCEPT
+optional<Square> Chess::operator+(const Square left,
+                                  const pair<int, int> right) NOEXCEPT
 {
     if (PutsOutOfRange(left, right))
     {
-        return boost::none;
+        return none;
     }
     else
     {
@@ -230,8 +282,8 @@ boost::optional<Square> Chess::operator+(const Square left,
     }
 }
 
-boost::optional<Square>& Chess::operator+=(boost::optional<Square>& left,
-                                           const pair<int, int> right) NOEXCEPT
+optional<Square>& Chess::operator+=(optional<Square>& left,
+                                    const pair<int, int> right) NOEXCEPT
 {
     return left = (left ? *left + right : left);
 }
@@ -245,14 +297,14 @@ Square& Chess::operator+=(Square& left, const pair<int, int> right)
     throw out_of_range("operator+= puts out of range");
 }
 
-boost::optional<Square> Chess::operator-(const Square left,
-                                         const pair<int, int> right) NOEXCEPT
+optional<Square> Chess::operator-(const Square left,
+                                  const pair<int, int> right) NOEXCEPT
 {
     return left + make_pair(-right.first, -right.second);
 }
 
-boost::optional<Square>& Chess::operator-=(boost::optional<Square>& left,
-                                           const pair<int, int> right) NOEXCEPT
+optional<Square>& Chess::operator-=(optional<Square>& left,
+                                    const pair<int, int> right) NOEXCEPT
 {
     return left = (left ? *left - right : left);
 }
@@ -398,12 +450,12 @@ Board Board::HackyMakeDefaultStart()
                 break;
 
             default:
-                assert(ret.squares[file][rank] == boost::none);
+                assert(ret.squares[file][rank] == none);
             }
         }
     }
 
-    assert(ret.enPassantable == boost::none);
+    assert(ret.enPassantable == none);
     ret.toMove = Colour::White;
     ret.wRightCastleRook = Square(7, 0);
     ret.wLeftCastleRook = Square(0, 0);
@@ -412,12 +464,12 @@ Board Board::HackyMakeDefaultStart()
     return ret;
 }
 
-boost::optional<Piece>& Board::operator[](const Square s)NOEXCEPT
+optional<Piece>& Board::operator[](const Square s)NOEXCEPT
 {
     return squares[s.File()][s.Rank()];
 }
 
-const boost::optional<Piece>& Board::operator[](const Square s) const NOEXCEPT
+const optional<Piece>& Board::operator[](const Square s) const NOEXCEPT
 {
     return squares[s.File()][s.Rank()];
 }
@@ -453,8 +505,8 @@ static void PrintBorder(ostream& os, const bool printMoveMarker,
 }
 
 static void PrintHackyBorder(ostream& os, const bool printMoveMarker,
-                             const boost::optional<Square> castleKings,
-                             const boost::optional<Square> castleQueens)
+                             const optional<Square> castleKings,
+                             const optional<Square> castleQueens)
 {
     unordered_set<int> castleMarkers;
     // HACK: starting position of king assumed
@@ -510,7 +562,7 @@ ostream& Chess::operator<<(ostream& os, const Board& b)
     return os;
 }
 
-boost::optional<string> Chess::CannotMove(const Board& b, const Move m)
+optional<string> Chess::CannotMove(const Board& b, const Move m)
 {
     auto piece = b[m.from];
     if (!piece)
@@ -547,14 +599,13 @@ boost::optional<string> Chess::CannotMove(const Board& b, const Move m)
         isMoveLegal = GenerateKingMoves(b, m.from, piece->colour).count(m) > 0;
     }
 
-    return isMoveLegal
-               ? boost::none
-               : boost::make_optional("cannot move " + ToString(piece->type) +
-                                      " to " + ToString(m.to));
+    return isMoveLegal ? none : boost::make_optional("cannot move " +
+                                                     ToString(piece->type) +
+                                                     " to " + ToString(m.to));
 }
 
 static void HandlePawnMove(Board& b, const Move m,
-                           boost::optional<Square> enPassantable) NOEXCEPT
+                           optional<Square> enPassantable) NOEXCEPT
 {
     // check en passent
     const auto moveVec = m.to - m.from;
@@ -567,7 +618,7 @@ static void HandlePawnMove(Board& b, const Move m,
     else if (moveVec.first != 0 && !b[m.to] && enPassantable)
     {
         // the move is an en passant capture!
-        b[*enPassantable] = boost::none;
+        b[*enPassantable] = none;
     }
 }
 
@@ -577,22 +628,22 @@ static void MarkNotCastlable(Board& b, const Square s, const Colour c)
     {
         if (b.wLeftCastleRook == s)
         {
-            b.wLeftCastleRook = boost::none;
+            b.wLeftCastleRook = none;
         }
         else if (b.wRightCastleRook == s)
         {
-            b.wRightCastleRook = boost::none;
+            b.wRightCastleRook = none;
         }
     }
     else
     {
         if (b.bLeftCastleRook == s)
         {
-            b.bLeftCastleRook = boost::none;
+            b.bLeftCastleRook = none;
         }
         else if (b.bRightCastleRook == s)
         {
-            b.bRightCastleRook = boost::none;
+            b.bRightCastleRook = none;
         }
     }
 }
@@ -605,9 +656,9 @@ static void HandleRookMove(Board& b, const Move m, const Colour c) NOEXCEPT
 static void HandleKingMove(Board& b, const Move m, const Colour c) NOEXCEPT
 {
     const int fileDifference = (m.to - m.from).first;
-    boost::optional<Square>& leftCastleRook =
+    optional<Square>& leftCastleRook =
         c == Colour::White ? b.wLeftCastleRook : b.bLeftCastleRook;
-    boost::optional<Square>& rightCastleRook =
+    optional<Square>& rightCastleRook =
         c == Colour::White ? b.wRightCastleRook : b.bRightCastleRook;
 
     // if this move is castling, move the rook into place
@@ -621,8 +672,8 @@ static void HandleKingMove(Board& b, const Move m, const Colour c) NOEXCEPT
     }
 
     // as the king has moved, it can't castle for the rest of the game
-    leftCastleRook = boost::none;
-    rightCastleRook = boost::none;
+    leftCastleRook = none;
+    rightCastleRook = none;
 }
 
 void Chess::MakeMove(Board& b, const Move m, const bool switchTurn)
@@ -640,7 +691,7 @@ void Chess::MakeMove(Board& b, const Move m, const bool switchTurn)
 
     const auto currEnPassentable = b.enPassantable;
     b.enPassantable =
-        boost::none; // this will be overwritten if player double-moves a pawn
+        none; // this will be overwritten if player double-moves a pawn
 
     // handle special moves (castling, pawn double and en passent)
     switch (piece->type)
@@ -659,7 +710,7 @@ void Chess::MakeMove(Board& b, const Move m, const bool switchTurn)
     }
 
     // make the move
-    b[m.from] = boost::none;
+    b[m.from] = none;
 
     // if the move captures a castlable rook, null out the castlable
     if (b[m.to] && b[m.to]->type == Type::Rook)
@@ -761,8 +812,8 @@ struct IsEmpty
 // suitable for pawn capture
 struct IsCapturable
 {
-    bool operator()(const Board& b, const Square s, const Colour c) const
-        NOEXCEPT
+    bool operator()(const Board& b, const Square s,
+                    const Colour c) const NOEXCEPT
     {
         return b[s] && b[s]->colour != c;
     }
@@ -771,8 +822,8 @@ struct IsCapturable
 // suitable for non-pawn movement and capture
 struct IsEmptyOrCapturable
 {
-    bool operator()(const Board& b, const Square s, const Colour c) const
-        NOEXCEPT
+    bool operator()(const Board& b, const Square s,
+                    const Colour c) const NOEXCEPT
     {
         return IsEmpty()(b, s, c) || IsCapturable()(b, s, c);
     }
@@ -780,30 +831,24 @@ struct IsEmptyOrCapturable
 }
 
 static const array<pair<int, int>, 2> WhitePawnAttacks = {
-    { make_pair(-1, 1), make_pair(1, 1) }
-};
+    {make_pair(-1, 1), make_pair(1, 1)}};
 
 static const array<pair<int, int>, 2> BlackPawnAttacks = {
-    { make_pair(-1, -1), make_pair(1, -1) }
-};
+    {make_pair(-1, -1), make_pair(1, -1)}};
 
 static const array<pair<int, int>, 8> LShapes = {
-    { make_pair(-2, -1), make_pair(-2, 1), make_pair(-1, -2), make_pair(-1, 2),
-      make_pair(1, -2), make_pair(1, 2), make_pair(2, -1), make_pair(2, 1) }
-};
+    {make_pair(-2, -1), make_pair(-2, 1), make_pair(-1, -2), make_pair(-1, 2),
+     make_pair(1, -2), make_pair(1, 2), make_pair(2, -1), make_pair(2, 1)}};
 
 static const array<pair<int, int>, 4> Diagonals = {
-    { make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1) }
-};
+    {make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1)}};
 
 static const array<pair<int, int>, 4> Cardinals = {
-    { make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0) }
-};
+    {make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0)}};
 
 static const array<pair<int, int>, 8> CardinalsAndDiagonals = {
-    { make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0),
-      make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1) }
-};
+    {make_pair(0, -1), make_pair(0, 1), make_pair(-1, 0), make_pair(1, 0),
+     make_pair(-1, -1), make_pair(-1, 1), make_pair(1, -1), make_pair(1, 1)}};
 
 // Board irrelevant for pawn, knight and king, and colour only relevant to pawn
 
@@ -921,8 +966,8 @@ unordered_set<Move> Chess::GeneratePawnMoves(const Board& b, const Square s,
     const bool isWhite = c == Colour::White;
 
     // insert the non-attacks
-    const array<pair<int, int>, 1> moveVec = { { isWhite ? make_pair(0, 1)
-                                                         : make_pair(0, -1) } };
+    const array<pair<int, int>, 1> moveVec = {
+        {isWhite ? make_pair(0, 1) : make_pair(0, -1)}};
     const int doubleMoveRank = isWhite ? 1 : NumRanks - 2;
     auto ret =
         LegalMoves(b, s, CheckAttacks(b, s, c, IsEmpty(), moveVec,
@@ -968,7 +1013,7 @@ unordered_set<Move> Chess::GenerateQueenMoves(const Board& b, const Square s,
 static bool CanCastle(const Board& b, const Square kingSq, const Square rookSq,
                       const pair<int, int> dir)
 {
-    boost::optional<Square> sweep = kingSq;
+    optional<Square> sweep = kingSq;
     while (sweep += dir)
     {
         if (*sweep == rookSq)
@@ -992,9 +1037,9 @@ unordered_set<Move> Chess::GenerateKingMoves(const Board& b, const Square s,
     auto moves = LegalMoves(b, s, CheckAttacks(b, s, c, IsEmptyOrCapturable(),
                                                CardinalsAndDiagonals, 1));
 
-    const boost::optional<Square>& leftCastleRook =
+    const optional<Square>& leftCastleRook =
         c == Colour::White ? b.wLeftCastleRook : b.bLeftCastleRook;
-    const boost::optional<Square>& rightCastleRook =
+    const optional<Square>& rightCastleRook =
         c == Colour::White ? b.wRightCastleRook : b.bRightCastleRook;
 
     if (leftCastleRook && CanCastle(b, s, *leftCastleRook, make_pair(-1, 0)))

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <unordered_set>
 #include <boost/scope_exit.hpp>
 #include "BoardRep.h"
 
@@ -8,10 +9,10 @@ using namespace Chess;
 
 int main()
 {
-    cout << boolalpha;
+    Board current = Board::HackyMakeDefaultStart();
+    cout << current << endl;
 
-    Board b = Board::HackyMakeDefaultStart();
-    cout << b << endl;
+    unordered_multiset<Board> history = {current};
 
     for (string s; getline(cin, s);)
     {
@@ -24,11 +25,18 @@ int main()
         try
         {
             auto m = StringToMove(s);
-            MakeMoveChecked(b, m);
-            cout << b << "\n";
-            if (InCheck(b))
+            MakeMoveChecked(current, m);
+            cout << current << "\n";
+            if (InCheck(current))
             {
-                cout << b.toMove << " is in check!\n";
+                cout << current.toMove << " is in check!\n";
+            }
+            
+            history.insert(current);
+            if (history.count(current) >= 3)
+            {
+                cout << "The game is a draw by threefold repetition\n";
+                return 0;
             }
         }
         catch (logic_error e)

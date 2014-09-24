@@ -8,19 +8,33 @@
 
 namespace Chess
 {
+struct Piece;
 class Square;
 struct Move;
+struct Board;
 }
 
 namespace std
 {
+template <> struct hash<boost::optional<Chess::Piece>>
+{
+    std::size_t operator()(const boost::optional<Chess::Piece>&) const;
+};
 template <> struct hash<Chess::Square>
 {
     std::size_t operator()(const Chess::Square&) const;
 };
+template <> struct hash<boost::optional<Chess::Square>>
+{
+    std::size_t operator()(const boost::optional<Chess::Square>&) const;
+};
 template <> struct hash<Chess::Move>
 {
     std::size_t operator()(const Chess::Move&) const;
+};
+template <> struct hash<Chess::Board>
+{
+    std::size_t operator()(const Chess::Board&) const;
 };
 }
 
