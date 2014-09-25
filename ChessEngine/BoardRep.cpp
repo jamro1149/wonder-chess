@@ -77,7 +77,7 @@ size_t hash<Board>::operator()(const Board& b) const
     return ret;
 }
 
-std::string Chess::ToString(const Type t)
+string Chess::ToString(const Type t)
 {
     switch (t)
     {
@@ -124,7 +124,7 @@ Colour Chess::operator!(const Colour c)NOEXCEPT
     return c == Colour::White ? Colour::Black : Colour::White;
 }
 
-std::string Chess::ToString(const Colour c)
+string Chess::ToString(const Colour c)
 {
     switch (c)
     {
@@ -137,7 +137,7 @@ std::string Chess::ToString(const Colour c)
     }
 }
 
-std::ostream& Chess::operator<<(std::ostream& os, const Colour c)
+ostream& Chess::operator<<(ostream& os, const Colour c)
 {
     return os << ToString(c);
 }
@@ -375,7 +375,7 @@ bool Chess::operator!=(const Move left, const Move right) NOEXCEPT
     return !(left == right);
 }
 
-std::ostream& Chess::operator<<(std::ostream& os, const Move m)
+ostream& Chess::operator<<(ostream& os, const Move m)
 {
     return os << "(" << m.from << ", " << m.to << ")";
 }
@@ -1106,7 +1106,7 @@ unordered_set<Move> Chess::GenerateKingMoves(const Board& b, const Square s,
 unordered_set<Move> Chess::GeneratePieceMoves(const Board& b, const Square sq,
                                               const Piece p)
 {
-    switch(p.type)
+    switch (p.type)
     {
     case Type::Pawn:
         return GeneratePawnMoves(b, sq, p.colour);
@@ -1146,4 +1146,3 @@ unordered_set<Move> Chess::GenerateMoves(const Board& b, const Colour c)
 
     return ret;
 }
-
