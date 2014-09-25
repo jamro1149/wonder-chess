@@ -154,7 +154,9 @@ Board NextBoard(const Board&, Move, bool switchTurn = true);
 Board NextBoardChecked(const Board&, Move, bool switchTurn = true);
 
 std::unordered_set<Square> ThreatenedSquares(const Board&, Colour);
-bool InCheck(const Board&);
+bool InCheck(const Board&, bool UseToMoveColour = true);
+bool NoMoves(const Board&);
+bool InCheckmate(const Board&);
 bool MoveIsReversible(const Board&, Move);
 
 std::unordered_set<Move> GeneratePawnMoves(const Board&, Square, Colour);
@@ -163,5 +165,8 @@ std::unordered_set<Move> GenerateBishopMoves(const Board&, Square, Colour);
 std::unordered_set<Move> GenerateRookMoves(const Board&, Square, Colour);
 std::unordered_set<Move> GenerateQueenMoves(const Board&, Square, Colour);
 std::unordered_set<Move> GenerateKingMoves(const Board&, Square, Colour);
+std::unordered_set<Move> GeneratePieceMoves(const Board&, Square, Piece);
+
+std::unordered_set<Move> GenerateMoves(const Board&, Colour);
 
 } // namespace Chess

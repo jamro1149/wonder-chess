@@ -755,13 +755,16 @@ CheckAttacks(const Board& b, const Square s, const Colour c, const predicate& p,
 
     for (const auto vec : vecs)
     {
+        bool newDir = true;
+
         int remainingRange = range;
         for (auto toSquare = s + vec; toSquare && remainingRange != 0;
              toSquare = *toSquare + vec, --remainingRange)
         {
-            if (p(b, *toSquare, c))
+            if (p(b, *toSquare, c, newDir))
             {
                 ret.insert(*toSquare);
+                newDir = false;
             }
             else
             {
@@ -785,8 +788,14 @@ class IsThreatening
     IsThreatening() NOEXCEPT : isBlocked(false)
     {
     }
-    bool operator()(const Board& b, const Square s, Colour) const NOEXCEPT
+    bool operator()(const Board& b, const Square s, Colour,
+                    const bool newDir) const NOEXCEPT
     {
+        if (newDir)
+        {
+            isBlocked = false;
+        }
+
         bool ret = false;
         if (!isBlocked)
         {
@@ -803,7 +812,8 @@ class IsThreatening
 // suitable for pawn movement
 struct IsEmpty
 {
-    bool operator()(const Board& b, const Square s, const Colour) const NOEXCEPT
+    bool operator()(const Board& b, const Square s, const Colour,
+                    bool = false) const NOEXCEPT
     {
         return !b[s];
     }
@@ -812,8 +822,8 @@ struct IsEmpty
 // suitable for pawn capture
 struct IsCapturable
 {
-    bool operator()(const Board& b, const Square s,
-                    const Colour c) const NOEXCEPT
+    bool operator()(const Board& b, const Square s, const Colour c,
+                    bool = false) const NOEXCEPT
     {
         return b[s] && b[s]->colour != c;
     }
@@ -822,8 +832,8 @@ struct IsCapturable
 // suitable for non-pawn movement and capture
 struct IsEmptyOrCapturable
 {
-    bool operator()(const Board& b, const Square s,
-                    const Colour c) const NOEXCEPT
+    bool operator()(const Board& b, const Square s, const Colour c,
+                    bool = false) const NOEXCEPT
     {
         return IsEmpty()(b, s, c) || IsCapturable()(b, s, c);
     }
@@ -928,17 +938,46 @@ unordered_set<Square> Chess::ThreatenedSquares(const Board& b, const Colour c)
     return ret;
 }
 
-bool Chess::InCheck(const Board& b)
+bool Chess::InCheck(const Board& b, const bool UseToMoveColour)
 {
-    for (const Square s : ThreatenedSquares(b, !b.toMove))
+    const Colour c = UseToMoveColour ? b.toMove : !b.toMove;
+
+    for (const Square s : ThreatenedSquares(b, !c))
     {
-        const auto piece = b[s];
-        if (piece && piece->colour == b.toMove && piece->type == Type::King)
+        const auto optPiece = b[s];
+        if (optPiece && optPiece->colour == c && optPiece->type == Type::King)
         {
             return true;
         }
     }
     return false;
+}
+
+bool Chess::NoMoves(const Board& b)
+{
+    for (int file = 0; file < NumFiles; ++file)
+    {
+        for (int rank = 0; rank < NumRanks; ++rank)
+        {
+            const Square sq(file, rank);
+            if (!b[sq] || b[sq]->colour != b.toMove)
+            {
+                continue;
+            }
+
+            if (GeneratePieceMoves(b, sq, *b[sq]).size() > 0)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool Chess::InCheckmate(const Board& b)
+{
+    return InCheck(b) && NoMoves(b);
 }
 
 bool Chess::MoveIsReversible(const Board& b, const Move m)
@@ -960,7 +999,7 @@ static unordered_set<Move> LegalMoves(const Board& b, const Square from,
     {
         const Move m(from, to);
         const auto next = NextBoard(b, m);
-        if (!InCheck(next))
+        if (!InCheck(next, false))
         {
             ret.insert(m);
         }
@@ -1063,3 +1102,48 @@ unordered_set<Move> Chess::GenerateKingMoves(const Board& b, const Square s,
 
     return moves;
 }
+
+unordered_set<Move> Chess::GeneratePieceMoves(const Board& b, const Square sq,
+                                              const Piece p)
+{
+    switch(p.type)
+    {
+    case Type::Pawn:
+        return GeneratePawnMoves(b, sq, p.colour);
+    case Type::Knight:
+        return GeneratePawnMoves(b, sq, p.colour);
+    case Type::Bishop:
+        return GenerateBishopMoves(b, sq, p.colour);
+    case Type::Rook:
+        return GenerateRookMoves(b, sq, p.colour);
+    case Type::Queen:
+        return GenerateQueenMoves(b, sq, p.colour);
+    case Type::King:
+        return GenerateKingMoves(b, sq, p.colour);
+    }
+}
+
+unordered_set<Move> Chess::GenerateMoves(const Board& b, const Colour c)
+{
+    unordered_set<Move> ret;
+
+    for (int file = 0; file < NumFiles; ++file)
+    {
+        for (int rank = 0; rank < NumRanks; ++rank)
+        {
+            const Square sq(file, rank);
+
+            if (!b[sq] || b[sq]->colour != c)
+            {
+                continue;
+            }
+
+            auto results = GeneratePieceMoves(b, sq, *b[sq]);
+
+            ret.insert(results.begin(), results.end());
+        }
+    }
+
+    return ret;
+}
+

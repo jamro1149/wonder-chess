@@ -1,4 +1,5 @@
 #include <iostream>
+#include <regex>
 #include <string>
 #include <unordered_set>
 #include <boost/scope_exit.hpp>
@@ -13,7 +14,7 @@ int main()
     cout << current << endl;
 
     unordered_multiset<Board> history = {current};
-    int reversibleMoves = 0;
+    int reversibleHalfMoves = 0;
 
     for (string s; getline(cin, s);)
     {
@@ -29,25 +30,38 @@ int main()
 
             if (MoveIsReversible(current, m))
             {
-                ++reversibleMoves;
+                ++reversibleHalfMoves;
             }
 
             MakeMoveChecked(current, m);
             cout << current << "\n";
 
-            if (InCheck(current))
+            const bool inCheck = InCheck(current);
+            const bool noMoves = NoMoves(current);
+
+            if (inCheck && !noMoves)
             {
                 cout << current.toMove << " is in check!\n";
             }
-            
+            else if (inCheck && noMoves)
+            {
+                cout << !current.toMove << " wins by checkmate!\n";
+                return 0;
+            }
+            else if (inCheck && noMoves)
+            {
+                cout << "The game is a draw by stalemate\n";
+                return 0;
+            }
+
             history.insert(current);
             if (history.count(current) >= 3)
             {
                 cout << "The game is a draw by threefold repetition\n";
-                //return 0;
+                return 0;
             }
 
-            if (reversibleMoves >= 50)
+            if (reversibleHalfMoves >= 100)
             {
                 cout << "The game is a draw by the fifty-move rule\n";
                 return 0;
