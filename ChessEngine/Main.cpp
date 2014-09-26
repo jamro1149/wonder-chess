@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <boost/scope_exit.hpp>
 #include "BoardRep.h"
+#include "Evaluation.h"
 
 using namespace std;
 using namespace Chess;
@@ -28,13 +29,15 @@ int main()
         {
             auto m = StringToMove(s);
 
-            if (MoveIsReversible(current, m))
-            {
-                ++reversibleHalfMoves;
-            }
+            reversibleHalfMoves =
+                MoveIsReversible(current, m) ? reversibleHalfMoves + 1 : 0;
 
             MakeMoveChecked(current, m);
-            cout << current << "\n";
+            cout << current
+                 << "\nThis board has a basic Shannon evaluation score of "
+                 << BasicShannonEvaluation(
+                        current, GenerateMoves(current, current.toMove).size())
+                 << " centipawns\n";
 
             const bool inCheck = InCheck(current);
             const bool noMoves = NoMoves(current);
