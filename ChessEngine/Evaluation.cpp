@@ -1,6 +1,5 @@
 #include <array>
 #include <climits>
-#include <iostream>
 #include "BoardRep.h"
 #include "Evaluation.h"
 
@@ -214,9 +213,6 @@ static int CalculatePawnStructScore(const Board& b, const int doubledWt,
    const auto dubPawns = DoubledPawns(b);
    const int doubledScore = doubledWt * (dubPawns.second - dubPawns.first);
 
-   cout << "\nWhite backwards pawns: " << NumBackwardsPawns(b, Colour::White)
-        << "\nBlack backwards pawns: " << NumBackwardsPawns(b, Colour::Black)
-        << endl;
    const int backwardsScore =
        backwardsWt * (NumBackwardsPawns(b, Colour::Black) -
                       NumBackwardsPawns(b, Colour::White));
@@ -224,26 +220,26 @@ static int CalculatePawnStructScore(const Board& b, const int doubledWt,
    const int isolatedScore = isolatedWt * (NumIsolatedPawns(b, Colour::Black) -
                                            NumIsolatedPawns(b, Colour::White));
 
-   cout << "\nDoubled Score: " << doubledScore
-        << "\nBackwards Score: " << backwardsScore << "\nIsolated Score: "
-        << isolatedScore << endl;
-
    return doubledScore + backwardsScore + isolatedScore;
 }
 
-int Chess::BasicShannonEvaluation(const Board& b, const int numMoves) NOEXCEPT
+static int CalculateMobilityScore(const Board& b, const int moveWt) NOEXCEPT
+{
+    const int numFriendlyMoves = GenerateMoves(b, b.toMove).size();
+    const int numEnemyMoves = GenerateMoves(b, !b.toMove).size();
+    const int moveScore = moveWt * (numFriendlyMoves - numEnemyMoves);
+
+    return moveScore;
+}
+
+int Chess::BasicShannonEvaluation(const Board& b) NOEXCEPT
 {
     const int MaterialScore =
         CalculateMaterialScore(b, 20000, 900, 500, 300, 300);
     const int PawnStructScore = CalculatePawnStructScore(b, 50, 50, 50);
-    const int numEnemyMoves = GenerateMoves(b, !b.toMove).size();
-    const int MobilityScore = 10 * (numMoves - numEnemyMoves);
-
-    const int sign = b.toMove == Colour::White ? 1 : -1;
-
-    cout << "\nMaterial Score is: " << MaterialScore
-         << "\nPawn Structure Score is: " << PawnStructScore
-         << "\nMobility Score is: " << MobilityScore << endl;
+    const int MobilityScore = CalculateMobilityScore(b, 10);
+    
+    const int sign = (b.toMove == Colour::White ? 1 : -1);
 
     return sign * (MaterialScore + PawnStructScore + MobilityScore);
 }

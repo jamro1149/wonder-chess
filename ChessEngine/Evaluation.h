@@ -3,5 +3,5 @@
 namespace Chess
 {
     struct Board;
-    int BasicShannonEvaluation(const Board&, int numMoves) NOEXCEPT;
+    int BasicShannonEvaluation(const Board&) NOEXCEPT;
 } // namespace Chess

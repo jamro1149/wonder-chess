@@ -5,6 +5,7 @@
 #include <boost/scope_exit.hpp>
 #include "BoardRep.h"
 #include "Evaluation.h"
+#include "Search.h"
 
 using namespace std;
 using namespace Chess;
@@ -27,7 +28,9 @@ int main()
 
         try
         {
-            auto m = StringToMove(s);
+            auto m = (s != "ai-turn"
+                          ? StringToMove(s)
+                          : NegaMaxSearch(current, &BasicShannonEvaluation, 4));
 
             reversibleHalfMoves =
                 MoveIsReversible(current, m) ? reversibleHalfMoves + 1 : 0;
@@ -35,9 +38,7 @@ int main()
             MakeMoveChecked(current, m);
             cout << current
                  << "\nThis board has a basic Shannon evaluation score of "
-                 << BasicShannonEvaluation(
-                        current, GenerateMoves(current, current.toMove).size())
-                 << " centipawns\n";
+                 << BasicShannonEvaluation(current) << " centipawns\n";
 
             const bool inCheck = InCheck(current);
             const bool noMoves = NoMoves(current);
@@ -51,7 +52,7 @@ int main()
                 cout << !current.toMove << " wins by checkmate!\n";
                 return 0;
             }
-            else if (inCheck && noMoves)
+            else if (!inCheck && noMoves)
             {
                 cout << "The game is a draw by stalemate\n";
                 return 0;

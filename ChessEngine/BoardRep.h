@@ -1,9 +1,10 @@
+#pragma once
+
 #include <boost/optional/optional.hpp>
 #include <array>
 #include <functional>
 #include <iosfwd>
 #include <string>
-#include <unordered_set>
 #include "Utility.h"
 
 namespace Chess
@@ -92,6 +93,7 @@ class Square
     int Rank() const NOEXCEPT;
     void File(int);
     void Rank(int);
+    friend bool operator<(Square, Square) NOEXCEPT; // for sorted vectors
     friend bool operator==(Square, Square) NOEXCEPT;
     friend std::size_t std::hash<Square>::operator()(const Square&) const;
 };
@@ -153,20 +155,20 @@ void MakeMoveChecked(Board&, Move, bool switchTurn = true); // invalid_argument
 Board NextBoard(const Board&, Move, bool switchTurn = true);
 Board NextBoardChecked(const Board&, Move, bool switchTurn = true);
 
-std::unordered_set<Square> ThreatenedSquares(const Board&, Colour);
+std::vector<Square> ThreatenedSquares(const Board&, Colour);
 bool InCheck(const Board&, bool UseToMoveColour = true);
 bool NoMoves(const Board&);
 bool InCheckmate(const Board&);
 bool MoveIsReversible(const Board&, Move);
 
-std::unordered_set<Move> GeneratePawnMoves(const Board&, Square, Colour);
-std::unordered_set<Move> GenerateKnightMoves(const Board&, Square, Colour);
-std::unordered_set<Move> GenerateBishopMoves(const Board&, Square, Colour);
-std::unordered_set<Move> GenerateRookMoves(const Board&, Square, Colour);
-std::unordered_set<Move> GenerateQueenMoves(const Board&, Square, Colour);
-std::unordered_set<Move> GenerateKingMoves(const Board&, Square, Colour);
-std::unordered_set<Move> GeneratePieceMoves(const Board&, Square, Piece);
+std::vector<Move> GeneratePawnMoves(const Board&, Square, Colour);
+std::vector<Move> GenerateKnightMoves(const Board&, Square, Colour);
+std::vector<Move> GenerateBishopMoves(const Board&, Square, Colour);
+std::vector<Move> GenerateRookMoves(const Board&, Square, Colour);
+std::vector<Move> GenerateQueenMoves(const Board&, Square, Colour);
+std::vector<Move> GenerateKingMoves(const Board&, Square, Colour);
+std::vector<Move> GeneratePieceMoves(const Board&, Square, Piece);
 
-std::unordered_set<Move> GenerateMoves(const Board&, Colour);
+std::vector<Move> GenerateMoves(const Board&, Colour);
 
 } // namespace Chess
