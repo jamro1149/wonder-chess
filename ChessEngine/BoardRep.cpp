@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iterator>
+#include <map>
 #if STDREGEX_SUPPORTED
 #include <regex>
 #else
@@ -24,13 +25,13 @@ static size_t CombineHash(size_t OldHash, size_t NewHash)
     return (OldHash << 1) ^ NewHash;
 }
 
-size_t hash<optional<Piece>>::operator()(const optional<Piece>& ot) const
+size_t hash<optional<Piece>>::operator()(const optional<Piece>& op) const
 {
-    hash<bool> hb;
-    hash<int> hi;
-    return CombineHash(hb(ot.is_initialized()),
-                       !ot ? 0 : CombineHash(hi(static_cast<int>(ot->type)),
-                                             hi(static_cast<int>(ot->colour))));
+    uint32_t optPieceId = !op.is_initialized()
+                              ? 0xFFFFFFFF
+                              : (static_cast<uint32_t>(op->type) << 16) &
+                                    static_cast<uint32_t>(op->colour);
+    return hash<uint32_t>()(optPieceId);
 }
 size_t hash<Square>::operator()(const Square& s) const
 {
@@ -996,17 +997,32 @@ vector<Square> Chess::ThreatenedSquares(const Board& b, const Colour c)
 
 bool Chess::InCheck(const Board& b, const bool UseToMoveColour)
 {
+    static map<size_t, bool> CachedResults;
+    const size_t hash = std::hash<Board>()(b);
+
+    const auto pairItBool = CachedResults.insert(make_pair(hash, bool()));
+
+    if (!pairItBool.second)
+    {
+        return pairItBool.first->second;
+    }
+
     const Colour c = UseToMoveColour ? b.toMove : !b.toMove;
+
+    bool ret = false;
 
     for (const Square s : ThreatenedSquares(b, !c))
     {
         const auto optPiece = b[s];
         if (optPiece && optPiece->colour == c && optPiece->type == Type::King)
         {
-            return true;
+            ret = true;
+            break;
         }
     }
-    return false;
+
+    pairItBool.first->second = ret;
+    return ret;
 }
 
 bool Chess::NoMoves(const Board& b)

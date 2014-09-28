@@ -98,6 +98,8 @@ class Square
     friend std::size_t std::hash<Square>::operator()(const Square&) const;
 };
 
+bool operator<(Square, Square) NOEXCEPT;
+bool operator==(Square, Square) NOEXCEPT;
 bool operator!=(Square, Square) NOEXCEPT;
 std::string getPrettyFile(Square);
 std::string ToString(Square);
