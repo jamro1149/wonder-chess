@@ -1,4 +1,5 @@
 #include <iostream>
+#include <map>
 #include <regex>
 #include <string>
 #include <unordered_set>
@@ -17,6 +18,7 @@ int main()
 
     unordered_multiset<Board> history = {current};
     int reversibleHalfMoves = 0;
+    //int numHalfMoves = 0;
 
     for (string s; getline(cin, s);)
     {
@@ -28,12 +30,21 @@ int main()
 
         try
         {
+            if (s == "flush")
+            {
+                extern map<size_t, bool> CachedResults;
+                CachedResults.clear();
+                continue;
+            }
             auto m = (s != "ai-turn"
                           ? StringToMove(s)
                           : NegaMaxSearch(current, &BasicShannonEvaluation, 4));
 
+            //auto m = NegaMaxSearch(current, &BasicShannonEvaluation, 4);
+
             reversibleHalfMoves =
                 MoveIsReversible(current, m) ? reversibleHalfMoves + 1 : 0;
+            //++numHalfMoves;
 
             MakeMoveChecked(current, m);
             cout << current
@@ -70,6 +81,12 @@ int main()
                 cout << "The game is a draw by the fifty-move rule\n";
                 return 0;
             }
+
+            //if (numHalfMoves > 20)
+            //{
+            //    cout << "That's all folks!\n";
+            //    return 0;
+            //}
         }
         catch (logic_error e)
         {

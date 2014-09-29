@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <climits>
-#include <iostream>
 #include <stdexcept>
 
 template <typename Func>
@@ -17,14 +16,8 @@ int Chess::NegaMaxScore(const Board& b, const Func eval, int alpha,
         return eval(b);
     }
 
-    const auto moves = GenerateMoves(b, b.toMove);
-
-    if (moves.empty())
-    {
-        return InCheck(b) ? -INT_MAX : 0; // use -INT_MAX instead of INT_MIN,
-                                          // since INT_MIN might be negated
-                                          // which would overflow the int
-    }
+    // overgenerate moves - check later to see if legal
+    const auto moves = GenerateMoves(b, b.toMove, false);
 
     for (const auto move : moves)
     {
@@ -37,7 +30,7 @@ int Chess::NegaMaxScore(const Board& b, const Func eval, int alpha,
             return newScore;
         }
 
-        if (newScore > alpha)
+        if (newScore > alpha && !InCheck(NextBoard(b, move), false))
         {
             alpha = newScore;
         }
@@ -50,7 +43,7 @@ template <typename Func>
 Chess::Move Chess::NegaMaxSearch(const Board& b, const Func eval,
                                  const int depth)
 {
-    const auto moves = GenerateMoves(b, b.toMove);
+    const auto moves = GenerateMoves(b, b.toMove, false);
 
     if (moves.empty())
     {
@@ -66,16 +59,16 @@ Chess::Move Chess::NegaMaxSearch(const Board& b, const Func eval,
         const int newScore =
             -NegaMaxScore(nextB, eval, alpha, INT_MAX, depth - 1);
 
-        std::cout << nextB << "\nHas a score of " << newScore << "\n\n";
+        //std::cout << nextB << "\nHas a score of " << newScore << "\n\n";
 
-        if (newScore > alpha)
+        if (newScore > alpha && !InCheck(NextBoard(b, move), false))
         {
             alpha = newScore;
             bestMove = move;
         }
     }
 
-    std::cout << bestMove << " selected\n";
+    //std::cout << bestMove << " selected\n";
 
     return bestMove;
 }

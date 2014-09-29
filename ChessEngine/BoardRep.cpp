@@ -995,9 +995,10 @@ vector<Square> Chess::ThreatenedSquares(const Board& b, const Colour c)
     return ret;
 }
 
+map<size_t, bool> CachedResults;
+
 bool Chess::InCheck(const Board& b, const bool UseToMoveColour)
 {
-    static map<size_t, bool> CachedResults;
     const size_t hash = std::hash<Board>()(b);
 
     const auto pairItBool = CachedResults.insert(make_pair(hash, bool()));
@@ -1061,27 +1062,30 @@ bool Chess::MoveIsReversible(const Board& b, const Move m)
     return b[m.from]->type != Type::Pawn && !b[m.to];
 }
 
+static vector<Move> AllMoves(const Square from, const vector<Square>& tos)
+{
+    vector<Move> ret(tos.size(), Move(Square(0, 0), Square(0, 0)));
+    std::transform(tos.begin(), tos.end(), ret.begin(),
+                   [from](const Square s) { return Move(from, s); });
+    return ret;
+}
+
 static vector<Move> LegalMoves(const Board& b, const Square from,
                                const vector<Square>& tos)
 {
-    vector<Move> ret;
-    ret.reserve(tos.size());
+    auto ret = AllMoves(from, tos);
 
-    for (const Square to : tos)
-    {
-        const Move m(from, to);
-        const auto next = NextBoard(b, m);
-        if (!InCheck(next, false))
-        {
-            ret.push_back(m);
-        }
-    }
+    ret.erase(std::remove_if(ret.begin(), ret.end(), [&b](const Move& m)
+                             {
+                  return InCheck(NextBoard(b, m), false);
+              }),
+              ret.end());
 
     return ret;
 }
 
 vector<Move> Chess::GeneratePawnMoves(const Board& b, const Square s,
-                                             const Colour c)
+                                      const Colour c, const bool onlyLegalMoves)
 {
     const bool isWhite = c == Colour::White;
 
@@ -1092,57 +1096,62 @@ vector<Move> Chess::GeneratePawnMoves(const Board& b, const Square s,
     vector<Square> squares;
     CheckAttacks(b, s, c, IsEmpty(), moveVec, back_inserter(squares),
                  s.Rank() == doubleMoveRank ? 2 : 1);
-    auto ret = LegalMoves(b, s, squares);
+    auto ret =
+        onlyLegalMoves ? LegalMoves(b, s, squares) : AllMoves(s, squares);
 
     // insert the attacks
     squares.clear();
     CheckAttacks(b, s, c, IsCapturable(),
                  isWhite ? WhitePawnAttacks : BlackPawnAttacks,
                  back_inserter(squares), 1);
-    const auto attacks = LegalMoves(b, s, squares);
+    const auto attacks =
+        onlyLegalMoves ? LegalMoves(b, s, squares) : AllMoves(s, squares);
     ret.insert(ret.end(), attacks.begin(), attacks.end());
 
     return ret;
 }
 
 vector<Move> Chess::GenerateKnightMoves(const Board& b, const Square s,
-                                               const Colour c)
+                                        const Colour c,
+                                        const bool onlyLegalMoves)
 {
     vector<Square> squares;
     squares.reserve(8);
     CheckAttacks(b, s, c, IsEmptyOrCapturable(), LShapes,
                  back_inserter(squares), 1);
-    return LegalMoves(b, s, squares);
+    return onlyLegalMoves ? LegalMoves(b, s, squares) : AllMoves(s, squares);
 }
 
 vector<Move> Chess::GenerateBishopMoves(const Board& b, const Square s,
-                                               const Colour c)
+                                        const Colour c,
+                                        const bool onlyLegalMoves)
 {
     vector<Square> squares;
     squares.reserve(2 * (min(NumFiles, NumRanks) - 1));
     CheckAttacks(b, s, c, IsEmptyOrCapturable(), Diagonals,
                  back_inserter(squares));
-    return LegalMoves(b, s, squares);
+    return onlyLegalMoves ? LegalMoves(b, s, squares) : AllMoves(s, squares);
 }
 
 vector<Move> Chess::GenerateRookMoves(const Board& b, const Square s,
-                                             const Colour c)
+                                      const Colour c, const bool onlyLegalMoves)
 {
     vector<Square> squares;
     squares.reserve(2 * (min(NumFiles, NumRanks) - 1));
     CheckAttacks(b, s, c, IsEmptyOrCapturable(), Cardinals,
                  back_inserter(squares));
-    return LegalMoves(b, s, squares);
+    return onlyLegalMoves ? LegalMoves(b, s, squares) : AllMoves(s, squares);
 }
 
 vector<Move> Chess::GenerateQueenMoves(const Board& b, const Square s,
-                                              const Colour c)
+                                       const Colour c,
+                                       const bool onlyLegalMoves)
 {
     vector<Square> squares;
     squares.reserve(4 * (min(NumFiles, NumRanks) - 1));
     CheckAttacks(b, s, c, IsEmptyOrCapturable(), CardinalsAndDiagonals,
                  back_inserter(squares));
-    return LegalMoves(b, s, squares);
+    return onlyLegalMoves ? LegalMoves(b, s, squares) : AllMoves(s, squares);
 }
 
 static bool CanCastle(const Board& b, const Square kingSq, const Square rookSq,
@@ -1167,13 +1176,14 @@ static bool CanCastle(const Board& b, const Square kingSq, const Square rookSq,
 }
 
 vector<Move> Chess::GenerateKingMoves(const Board& b, const Square s,
-                                             const Colour c)
+                                      const Colour c, const bool onlyLegalMoves)
 {
     vector<Square> squares;
     squares.reserve(8);
     CheckAttacks(b, s, c, IsEmptyOrCapturable(), CardinalsAndDiagonals,
                  back_inserter(squares), 1);
-    auto moves = LegalMoves(b, s, squares);
+    auto moves =
+        onlyLegalMoves ? LegalMoves(b, s, squares) : AllMoves(s, squares);
 
     const optional<Square>& leftCastleRook =
         c == Colour::White ? b.wLeftCastleRook : b.bLeftCastleRook;
@@ -1194,26 +1204,27 @@ vector<Move> Chess::GenerateKingMoves(const Board& b, const Square s,
 }
 
 vector<Move> Chess::GeneratePieceMoves(const Board& b, const Square sq,
-                                              const Piece p)
+                                       const Piece p, const bool onlyLegalMoves)
 {
     switch (p.type)
     {
     case Type::Pawn:
-        return GeneratePawnMoves(b, sq, p.colour);
+        return GeneratePawnMoves(b, sq, p.colour, onlyLegalMoves);
     case Type::Knight:
-        return GenerateKnightMoves(b, sq, p.colour);
+        return GenerateKnightMoves(b, sq, p.colour, onlyLegalMoves);
     case Type::Bishop:
-        return GenerateBishopMoves(b, sq, p.colour);
+        return GenerateBishopMoves(b, sq, p.colour, onlyLegalMoves);
     case Type::Rook:
-        return GenerateRookMoves(b, sq, p.colour);
+        return GenerateRookMoves(b, sq, p.colour, onlyLegalMoves);
     case Type::Queen:
-        return GenerateQueenMoves(b, sq, p.colour);
+        return GenerateQueenMoves(b, sq, p.colour, onlyLegalMoves);
     case Type::King:
-        return GenerateKingMoves(b, sq, p.colour);
+        return GenerateKingMoves(b, sq, p.colour, onlyLegalMoves);
     }
 }
 
-vector<Move> Chess::GenerateMoves(const Board& b, const Colour c)
+vector<Move> Chess::GenerateMoves(const Board& b, const Colour c,
+                                  const bool onlyLegalMoves)
 {
     vector<Move> ret;
 
@@ -1228,7 +1239,7 @@ vector<Move> Chess::GenerateMoves(const Board& b, const Colour c)
                 continue;
             }
 
-            auto results = GeneratePieceMoves(b, sq, *b[sq]);
+            auto results = GeneratePieceMoves(b, sq, *b[sq], onlyLegalMoves);
 
             ret.insert(ret.end(), results.begin(), results.end());
         }

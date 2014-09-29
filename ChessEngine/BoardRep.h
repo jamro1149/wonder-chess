@@ -42,8 +42,9 @@ template <> struct hash<Chess::Board>
 namespace Chess
 {
 
-const int NumRanks = 8;
-const int NumFiles = 8;
+constexpr int NumRanks = 8;
+constexpr int NumFiles = 8;
+constexpr int NumSquares = NumFiles * NumRanks;
 
 enum class Type
 {
@@ -163,14 +164,22 @@ bool NoMoves(const Board&);
 bool InCheckmate(const Board&);
 bool MoveIsReversible(const Board&, Move);
 
-std::vector<Move> GeneratePawnMoves(const Board&, Square, Colour);
-std::vector<Move> GenerateKnightMoves(const Board&, Square, Colour);
-std::vector<Move> GenerateBishopMoves(const Board&, Square, Colour);
-std::vector<Move> GenerateRookMoves(const Board&, Square, Colour);
-std::vector<Move> GenerateQueenMoves(const Board&, Square, Colour);
-std::vector<Move> GenerateKingMoves(const Board&, Square, Colour);
-std::vector<Move> GeneratePieceMoves(const Board&, Square, Piece);
+std::vector<Move> GeneratePawnMoves(const Board&, Square, Colour,
+                                    bool onlyLegalMoves = true);
+std::vector<Move> GenerateKnightMoves(const Board&, Square, Colour,
+                                      bool onlyLegalMoves = true);
+std::vector<Move> GenerateBishopMoves(const Board&, Square, Colour,
+                                      bool onlyLegalMoves = true);
+std::vector<Move> GenerateRookMoves(const Board&, Square, Colour,
+                                    bool onlyLegalMoves = true);
+std::vector<Move> GenerateQueenMoves(const Board&, Square, Colour,
+                                     bool onlyLegalMoves = true);
+std::vector<Move> GenerateKingMoves(const Board&, Square, Colour,
+                                    bool onlyLegalMoves = true);
+std::vector<Move> GeneratePieceMoves(const Board&, Square, Piece,
+                                     bool onlyLegalMoves = true);
 
-std::vector<Move> GenerateMoves(const Board&, Colour);
+std::vector<Move> GenerateMoves(const Board&, Colour,
+                                bool onlyLegalMoves = true);
 
 } // namespace Chess
